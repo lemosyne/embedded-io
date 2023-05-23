@@ -1,5 +1,11 @@
 //! Blocking IO traits
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
 use core::fmt;
 
 /// Error returned by [`Read::read_exact`]
@@ -12,6 +18,12 @@ pub enum ReadExactError<E> {
     Other(E),
 }
 
+impl<E> From<E> for ReadExactError<E> {
+    fn from(value: E) -> Self {
+        Self::Other(value)
+    }
+}
+
 impl<E: fmt::Debug> fmt::Display for ReadExactError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -20,6 +32,30 @@ impl<E: fmt::Debug> fmt::Display for ReadExactError<E> {
 
 #[cfg(feature = "std")]
 impl<E: fmt::Debug> std::error::Error for ReadExactError<E> {}
+
+/// Error returned by [`Read::read_to_end`]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(all(feature = "alloc", feature = "defmt"), derive(defmt::Format))]
+pub enum ReadToEndError<E> {
+    /// Error returned by the inner Read.
+    Other(E),
+}
+
+#[cfg(feature = "alloc")]
+impl<E> From<E> for ReadToEndError<E> {
+    fn from(value: E) -> Self {
+        Self::Other(value)
+    }
+}
+
+impl<E: fmt::Debug> fmt::Display for ReadToEndError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+#[cfg(feature = "std")]
+impl<E: fmt::Debug> std::error::Error for ReadToEndError<E> {}
 
 /// Error returned by [`Write::write_fmt`]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -61,6 +97,28 @@ pub trait Read: crate::Io {
         } else {
             Ok(())
         }
+    }
+
+    /// Read all bytes until EOF in this source, placing them into `buf`.
+    ///
+    /// If successful, this function will return the total number of bytes read.
+    #[cfg(feature = "alloc")]
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize, ReadToEndError<Self::Error>> {
+        let mut count = 0;
+        let mut block = [0; 4096];
+
+        loop {
+            match self.read(&mut block) {
+                Ok(0) => break,
+                Ok(n) => {
+                    count += n;
+                    buf.extend(&block[..n]);
+                }
+                Err(e) => return Err(ReadToEndError::Other(e)),
+            }
+        }
+
+        Ok(count)
     }
 }
 
