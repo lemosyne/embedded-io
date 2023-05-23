@@ -33,30 +33,6 @@ impl<E: fmt::Debug> fmt::Display for ReadExactError<E> {
 #[cfg(feature = "std")]
 impl<E: fmt::Debug> std::error::Error for ReadExactError<E> {}
 
-/// Error returned by [`Read::read_to_end`]
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[cfg_attr(all(feature = "alloc", feature = "defmt"), derive(defmt::Format))]
-pub enum ReadToEndError<E> {
-    /// Error returned by the inner Read.
-    Other(E),
-}
-
-#[cfg(feature = "alloc")]
-impl<E> From<E> for ReadToEndError<E> {
-    fn from(value: E) -> Self {
-        Self::Other(value)
-    }
-}
-
-impl<E: fmt::Debug> fmt::Display for ReadToEndError<E> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-#[cfg(feature = "std")]
-impl<E: fmt::Debug> std::error::Error for ReadToEndError<E> {}
-
 /// Error returned by [`Write::write_fmt`]
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -103,7 +79,7 @@ pub trait Read: crate::Io {
     ///
     /// If successful, this function will return the total number of bytes read.
     #[cfg(feature = "alloc")]
-    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize, ReadToEndError<Self::Error>> {
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize, Self::Error> {
         let mut count = 0;
         let mut block = [0; 4096];
 
@@ -114,7 +90,7 @@ pub trait Read: crate::Io {
                     count += n;
                     buf.extend(&block[..n]);
                 }
-                Err(e) => return Err(ReadToEndError::Other(e)),
+                Err(e) => return Err(e),
             }
         }
 
