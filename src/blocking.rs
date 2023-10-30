@@ -240,14 +240,14 @@ pub trait ReadAt: crate::Io {
     /// The offset is relative to the start of the file and thus independent from the current cursor.
     /// The current file cursor is not affected by this function.
     /// It is not an error to return with a short read.
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error>;
+    fn read_at(&mut self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error>;
 
     /// Reads the exact number of byte required to fill buf from the given offset. The offset is
     /// relative to the start of the file and thus independent from the current cursor. The current
     /// file cursor is not affected by this function.
     #[cfg(feature = "alloc")]
     fn read_exact_at(
-        &self,
+        &mut self,
         mut buf: &mut [u8],
         mut offset: u64,
     ) -> Result<(), ReadExactAtError<Self::Error>> {
@@ -281,13 +281,13 @@ pub trait WriteAt: crate::Io {
     /// When writing beyond the end of the file, the file is appropriately extended and the intermediate bytes are initialized with the value 0.
     ///
     /// It is not an error to return a short write.
-    fn write_at(&self, buf: &[u8], offset: u64) -> Result<usize, Self::Error>;
+    fn write_at(&mut self, buf: &[u8], offset: u64) -> Result<usize, Self::Error>;
 
     /// Attempts to write an entire buffer starting from a given offset.
     /// The offset is relative to the start of the file and thus independent from the current cursor.
     /// The current file cursor is not affected by this function.
     /// This method will continuously call write_at until there is no more data to be written or an error of non-io::ErrorKind::Interrupted kind is returned. This method will not return until the entire buffer has been successfully written or such an error occurs.
-    fn write_all_at(&self, mut buf: &[u8], mut offset: u64) -> Result<(), Self::Error> {
+    fn write_all_at(&mut self, mut buf: &[u8], mut offset: u64) -> Result<(), Self::Error> {
         while !buf.is_empty() {
             match self.write_at(buf, offset) {
                 Ok(0) => panic!("zero-length write at."),
@@ -372,7 +372,7 @@ impl Write for &mut [u8] {
 ///
 /// TODO: Test that this works.
 impl ReadAt for &[u8] {
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
+    fn read_at(&mut self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
         // So we don't have to keep using `as usize`.
         let offset = offset as usize;
 
@@ -401,27 +401,27 @@ impl ReadAt for &[u8] {
 ///
 /// The same occurs when the offset is positioned past the end of the slice.
 ///
-/// TODO: Figure out mutability issues
-// impl WriteAt for &mut [u8] {
-//     fn write_at(&self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
-//         // So we don't have to keep using `as usize`.
-//         let offset = offset as usize;
+/// TODO: Testing.
+impl WriteAt for &mut [u8] {
+    fn write_at(&mut self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
+        // So we don't have to keep using `as usize`.
+        let offset = offset as usize;
 
-//         // Can't write past the end.
-//         if offset >= self.len() {
-//             return Ok(0);
-//         }
+        // Can't write past the end.
+        if offset >= self.len() {
+            return Ok(0);
+        }
 
-//         // We're sure that our write is within bounds.
-//         // We can either write the full requested amount or until the end.
-//         let amt = core::cmp::min(buf.len(), buf.len() - offset);
+        // We're sure that our write is within bounds.
+        // We can either write the full requested amount or until the end.
+        let amt = core::cmp::min(buf.len(), buf.len() - offset);
 
-//         // TODO: Didn't bother with mitigating copy_from_slice overheads on single byte reads.
-//         self[offset..offset + amt].copy_from_slice(&buf[..amt]);
+        // TODO: Didn't bother with mitigating copy_from_slice overheads on single byte reads.
+        self[offset..offset + amt].copy_from_slice(&buf[..amt]);
 
-//         Ok(amt)
-//     }
-// }
+        Ok(amt)
+    }
+}
 
 #[cfg(feature = "alloc")]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "alloc"))))]
@@ -471,7 +471,7 @@ impl<T: ?Sized + Seek> Seek for alloc::boxed::Box<T> {
 #[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "alloc"))))]
 impl<T: ?Sized + ReadAt> ReadAt for alloc::boxed::Box<T> {
     #[inline]
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
+    fn read_at(&mut self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
         T::read_at(self, buf, offset)
     }
 }
@@ -480,7 +480,7 @@ impl<T: ?Sized + ReadAt> ReadAt for alloc::boxed::Box<T> {
 #[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "alloc"))))]
 impl<T: ?Sized + WriteAt> WriteAt for alloc::boxed::Box<T> {
     #[inline]
-    fn write_at(&self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
+    fn write_at(&mut self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
         T::write_at(self, buf, offset)
     }
 }

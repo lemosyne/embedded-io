@@ -67,13 +67,13 @@ impl<T: std::io::Seek + ?Sized> crate::blocking::Seek for FromStd<T> {
 }
 
 impl<T: std::os::unix::fs::FileExt + ?Sized> crate::blocking::ReadAt for FromStd<T> {
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
+    fn read_at(&mut self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
         self.inner.read_at(buf, offset)
     }
 }
 
 impl<T: std::os::unix::fs::FileExt + ?Sized> crate::blocking::WriteAt for FromStd<T> {
-    fn write_at(&self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
+    fn write_at(&mut self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
         self.inner.write_at(buf, offset)
     }
 }
@@ -126,17 +126,5 @@ impl<T: crate::blocking::Write + ?Sized> std::io::Write for ToStd<T> {
 impl<T: crate::blocking::Seek + ?Sized> std::io::Seek for ToStd<T> {
     fn seek(&mut self, pos: std::io::SeekFrom) -> Result<u64, std::io::Error> {
         self.inner.seek(pos.into()).map_err(to_io_error)
-    }
-}
-
-impl<T: crate::blocking::ReadAt + crate::blocking::WriteAt + ?Sized> std::os::unix::fs::FileExt
-    for ToStd<T>
-{
-    fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<usize, std::io::Error> {
-        self.inner.read_at(buf, offset).map_err(to_io_error)
-    }
-
-    fn write_at(&self, buf: &[u8], offset: u64) -> Result<usize, std::io::Error> {
-        self.inner.write_at(buf, offset).map_err(to_io_error)
     }
 }
