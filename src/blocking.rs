@@ -248,8 +248,8 @@ pub trait ReadAt: crate::Io {
     #[cfg(feature = "alloc")]
     fn read_exact_at(
         &self,
-        buf: &mut [u8],
-        offset: u64,
+        mut buf: &mut [u8],
+        mut offset: u64,
     ) -> Result<(), ReadExactAtError<Self::Error>> {
         while !buf.is_empty() {
             match self.read_at(buf, offset) {
