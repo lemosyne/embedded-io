@@ -74,7 +74,35 @@ impl<T: std::os::unix::fs::FileExt + ?Sized> crate::blocking::ReadAt for FromStd
 }
 
 #[cfg(unix)]
+impl<T: std::os::unix::fs::FileExt + ?Sized> crate::blocking::ReadAt for &FromStd<T> {
+    fn read_at(&mut self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
+        self.inner.read_at(buf, offset)
+    }
+}
+
+#[cfg(unix)]
+impl<T: std::os::unix::fs::FileExt + ?Sized> crate::blocking::ReadAt for &mut FromStd<T> {
+    fn read_at(&mut self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
+        self.inner.read_at(buf, offset)
+    }
+}
+
+#[cfg(unix)]
 impl<T: std::os::unix::fs::FileExt + ?Sized> crate::blocking::WriteAt for FromStd<T> {
+    fn write_at(&mut self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
+        self.inner.write_at(buf, offset)
+    }
+}
+
+#[cfg(unix)]
+impl<T: std::os::unix::fs::FileExt + ?Sized> crate::blocking::WriteAt for &FromStd<T> {
+    fn write_at(&mut self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
+        self.inner.write_at(buf, offset)
+    }
+}
+
+#[cfg(unix)]
+impl<T: std::os::unix::fs::FileExt + ?Sized> crate::blocking::WriteAt for &mut FromStd<T> {
     fn write_at(&mut self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
         self.inner.write_at(buf, offset)
     }

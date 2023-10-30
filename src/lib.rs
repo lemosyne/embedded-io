@@ -100,6 +100,10 @@ pub trait Io {
     type Error: Error;
 }
 
+impl<T: ?Sized + crate::Io> crate::Io for &T {
+    type Error = T::Error;
+}
+
 impl<T: ?Sized + crate::Io> crate::Io for &mut T {
     type Error = T::Error;
 }
