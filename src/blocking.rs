@@ -287,7 +287,7 @@ pub trait WriteAt: crate::Io {
     /// The offset is relative to the start of the file and thus independent from the current cursor.
     /// The current file cursor is not affected by this function.
     /// This method will continuously call write_at until there is no more data to be written or an error of non-io::ErrorKind::Interrupted kind is returned. This method will not return until the entire buffer has been successfully written or such an error occurs.
-    fn write_all_at(&self, buf: &[u8], offset: u64) -> Result<(), Self::Error> {
+    fn write_all_at(&self, mut buf: &[u8], mut offset: u64) -> Result<(), Self::Error> {
         while !buf.is_empty() {
             match self.write_at(buf, offset) {
                 Ok(0) => panic!("zero-length write at."),
@@ -363,6 +363,66 @@ impl Write for &mut [u8] {
     }
 }
 
+/// ReadAt is implemented for `&[u8]` by copying from the slice.
+///
+/// Short reads will occur if the number of bytes to read exceeds the distance from the offset to
+/// the end of the slice.
+///
+/// If the offset is past the end of the slice, then a short read of `Ok(0)` occurs.
+///
+/// TODO: Test that this works.
+impl ReadAt for &[u8] {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
+        // So we don't have to keep using `as usize`.
+        let offset = offset as usize;
+
+        // Can't read past the end.
+        if offset >= self.len() {
+            return Ok(0);
+        }
+
+        // We're sure that our read is within bounds.
+        // We can either read the full requested amount or until the end.
+        let amt = core::cmp::min(buf.len(), buf.len() - offset);
+
+        // TODO: Didn't bother with mitigating copy_from_slice overheads on single byte reads.
+        buf[..amt].copy_from_slice(&self[offset..offset + amt]);
+
+        Ok(amt)
+    }
+}
+
+/// WriteAt is implemented for `&mut [u8]` by copying into the slice, overwriting
+/// its data.
+///
+/// If the number of bytes to be written exceeds the distance from the offset to the end of the
+/// slice, write operations will return short writes: ultimately, `Ok(0)`; in this situation,
+/// `write_all` returns an error of kind `ErrorKind::WriteZero`.
+///
+/// The same occurs when the offset is positioned past the end of the slice.
+///
+/// TODO: Figure out mutability issues
+// impl WriteAt for &mut [u8] {
+//     fn write_at(&self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
+//         // So we don't have to keep using `as usize`.
+//         let offset = offset as usize;
+
+//         // Can't write past the end.
+//         if offset >= self.len() {
+//             return Ok(0);
+//         }
+
+//         // We're sure that our write is within bounds.
+//         // We can either write the full requested amount or until the end.
+//         let amt = core::cmp::min(buf.len(), buf.len() - offset);
+
+//         // TODO: Didn't bother with mitigating copy_from_slice overheads on single byte reads.
+//         self[offset..offset + amt].copy_from_slice(&buf[..amt]);
+
+//         Ok(amt)
+//     }
+// }
+
 #[cfg(feature = "alloc")]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "alloc"))))]
 impl<T: ?Sized + Read> Read for alloc::boxed::Box<T> {
@@ -404,6 +464,24 @@ impl<T: ?Sized + Seek> Seek for alloc::boxed::Box<T> {
     #[inline]
     fn seek(&mut self, pos: crate::SeekFrom) -> Result<u64, Self::Error> {
         T::seek(self, pos)
+    }
+}
+
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "alloc"))))]
+impl<T: ?Sized + ReadAt> ReadAt for alloc::boxed::Box<T> {
+    #[inline]
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error> {
+        T::read_at(self, buf, offset)
+    }
+}
+
+#[cfg(feature = "alloc")]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "alloc"))))]
+impl<T: ?Sized + WriteAt> WriteAt for alloc::boxed::Box<T> {
+    #[inline]
+    fn write_at(&self, buf: &[u8], offset: u64) -> Result<usize, Self::Error> {
+        T::write_at(self, buf, offset)
     }
 }
 
