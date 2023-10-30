@@ -75,7 +75,7 @@ pub trait Read: crate::Io {
         }
     }
 
-    /// Read all bytes until EOF in this source, placing them into `buf`.
+    /// Reads all bytes until EOF in this source, placing them into `buf`.
     ///
     /// If successful, this function will return the total number of bytes read.
     #[cfg(feature = "alloc")]
@@ -268,6 +268,29 @@ pub trait ReadAt: crate::Io {
             Ok(())
         }
     }
+
+    /// Reads all bytes from the offset until EOF in this source, placing them into `buf`.
+    ///
+    /// If successful, this function will return the total number of bytes read.
+    #[cfg(feature = "alloc")]
+    fn read_to_end_at(&mut self, buf: &mut Vec<u8>, mut offset: u64) -> Result<usize, Self::Error> {
+        let mut count = 0;
+        let mut block = [0; 4096];
+
+        loop {
+            match self.read_at(&mut block, offset) {
+                Ok(0) => break,
+                Ok(n) => {
+                    count += n;
+                    offset += n as u64;
+                    buf.extend(&block[..n]);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(count)
+    }
 }
 
 /// Blocking positioned reader.
@@ -290,7 +313,7 @@ pub trait WriteAt: crate::Io {
     fn write_all_at(&mut self, mut buf: &[u8], mut offset: u64) -> Result<(), Self::Error> {
         while !buf.is_empty() {
             match self.write_at(buf, offset) {
-                Ok(0) => panic!("zero-length write at."),
+                Ok(0) => panic!("zero-length write."),
                 Ok(n) => {
                     buf = &buf[n..];
                     offset += n as u64
