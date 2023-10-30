@@ -222,6 +222,86 @@ impl<T: ?Sized + Seek> Seek for &mut T {
     }
 }
 
+/// Error returned by [`ReadAt::read_exact_at`]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum ReadExactAtError<E> {
+    /// An EOF error was encountered before reading the exact amount of requested bytes.
+    UnexpectedEof,
+    /// Error returned by the inner ReadAt.
+    Other(E),
+}
+
+/// Blocking positioned reader.
+///
+/// Semantics are the same as the [`std::os::unix::fs::FileExt`].
+pub trait ReadAt: crate::Io {
+    /// Reads a number of bytes starting from a given offset.
+    /// The offset is relative to the start of the file and thus independent from the current cursor.
+    /// The current file cursor is not affected by this function.
+    /// It is not an error to return with a short read.
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> Result<usize, Self::Error>;
+
+    /// Reads the exact number of byte required to fill buf from the given offset. The offset is
+    /// relative to the start of the file and thus independent from the current cursor. The current
+    /// file cursor is not affected by this function.
+    #[cfg(feature = "alloc")]
+    fn read_exact_at(
+        &self,
+        buf: &mut [u8],
+        offset: u64,
+    ) -> Result<(), ReadExactAtError<Self::Error>> {
+        while !buf.is_empty() {
+            match self.read_at(buf, offset) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let tmp = buf;
+                    buf = &mut tmp[n..];
+                    offset += n as u64;
+                }
+                Err(e) => return Err(ReadExactAtError::Other(e)),
+            }
+        }
+        if !buf.is_empty() {
+            Err(ReadExactAtError::UnexpectedEof)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+/// Blocking positioned reader.
+///
+/// Semantics are the same as the [`std::os::unix::fs::FileExt`].
+pub trait WriteAt: crate::Io {
+    /// Writes a number of bytes starting from a given offset.
+    /// Returns the number of bytes written.
+    /// The offset is relative to the start of the file and thus independent from the current cursor.
+    /// The current file cursor is not affected by this function.
+    /// When writing beyond the end of the file, the file is appropriately extended and the intermediate bytes are initialized with the value 0.
+    ///
+    /// It is not an error to return a short write.
+    fn write_at(&self, buf: &[u8], offset: u64) -> Result<usize, Self::Error>;
+
+    /// Attempts to write an entire buffer starting from a given offset.
+    /// The offset is relative to the start of the file and thus independent from the current cursor.
+    /// The current file cursor is not affected by this function.
+    /// This method will continuously call write_at until there is no more data to be written or an error of non-io::ErrorKind::Interrupted kind is returned. This method will not return until the entire buffer has been successfully written or such an error occurs.
+    fn write_all_at(&self, buf: &[u8], offset: u64) -> Result<(), Self::Error> {
+        while !buf.is_empty() {
+            match self.write_at(buf, offset) {
+                Ok(0) => panic!("zero-length write at."),
+                Ok(n) => {
+                    buf = &buf[n..];
+                    offset += n as u64
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Read is implemented for `&[u8]` by copying from the slice.
 ///
 /// Note that reading updates the slice to point to the yet unread part.
