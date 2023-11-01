@@ -186,10 +186,27 @@ pub trait Seek: crate::Io {
     }
 }
 
+impl<T: ?Sized + Read> Read for &T {
+    #[inline]
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
+        T::read(self, buf)
+    }
+}
+
 impl<T: ?Sized + Read> Read for &mut T {
     #[inline]
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         T::read(self, buf)
+    }
+}
+
+impl<T: ?Sized + BufRead> BufRead for &T {
+    fn fill_buf(&mut self) -> Result<&[u8], Self::Error> {
+        T::fill_buf(self)
+    }
+
+    fn consume(&mut self, amt: usize) {
+        T::consume(self, amt)
     }
 }
 
@@ -203,6 +220,18 @@ impl<T: ?Sized + BufRead> BufRead for &mut T {
     }
 }
 
+impl<T: ?Sized + Write> Write for &T {
+    #[inline]
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
+        T::write(self, buf)
+    }
+
+    #[inline]
+    fn flush(&mut self) -> Result<(), Self::Error> {
+        T::flush(self)
+    }
+}
+
 impl<T: ?Sized + Write> Write for &mut T {
     #[inline]
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
@@ -212,6 +241,13 @@ impl<T: ?Sized + Write> Write for &mut T {
     #[inline]
     fn flush(&mut self) -> Result<(), Self::Error> {
         T::flush(self)
+    }
+}
+
+impl<T: ?Sized + Seek> Seek for &T {
+    #[inline]
+    fn seek(&mut self, pos: crate::SeekFrom) -> Result<u64, Self::Error> {
+        T::seek(self, pos)
     }
 }
 
